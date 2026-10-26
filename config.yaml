@@ -10,11 +10,14 @@ timezone: "America/New_York"
 # Shift times in 24-hour format. A night shift that ends the next morning is handled automatically.
 shifts:
   - name: "Day"
-    start: "17:47"
+    start: "06:00"
     end: "15:00"
   - name: "Night"
     start: "15:00"
     end: "23:59"
+  - name: "Test"
+    start: "17:30"
+    end: "18:00"
 
 # Days the building runs: 0=Mon 1=Tue 2=Wed 3=Thu 4=Fri 5=Sat 6=Sun
 work_days: [0, 1, 2, 3, 4]
