@@ -10,7 +10,7 @@ timezone: "America/New_York"
 # Shift times in 24-hour format. A night shift that ends the next morning is handled automatically.
 shifts:
   - name: "Day"
-    start: "06:00"
+    start: "17:47"
     end: "15:00"
   - name: "Night"
     start: "15:00"
