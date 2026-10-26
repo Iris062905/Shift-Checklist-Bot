@@ -172,8 +172,13 @@ def main():
     for a in actions:
         print("done:", *a)
     if not actions:
-        print("Nothing due.")
-
+        tz = ZoneInfo(cfg["timezone"])
+        now = dt.datetime.now(tz)
+        print(f"Nothing due. Building time now: {now:%Y-%m-%d %I:%M %p %Z}")
+        upcoming = sorted((e for e in build_events(cfg, now) if e["at"] > now), key=lambda e: e["at"])
+        if upcoming:
+            e = upcoming[0]
+            print(f"Next: {e['kind']} for {e['shift']} shift at {e['at']:%Y-%m-%d %I:%M %p}")
 
 if __name__ == "__main__":
     main()
