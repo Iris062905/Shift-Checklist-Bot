@@ -1,0 +1,18 @@
+display_information:
+  name: Shift Checklist Bot
+  description: Posts shift checklist reminders and flags missing checklists
+  background_color: "#3a3a3f"
+features:
+  bot_user:
+    display_name: Shift Checklist Bot
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - channels:history
+      - groups:history
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

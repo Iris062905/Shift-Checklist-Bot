@@ -1,0 +1,36 @@
+# Aspire X Dock - Shift Checklist Bot settings
+# Each facility gets its own copy of this file. Only edit the values on the right.
+
+# Channel ID of #xin4-shift-checklists (right-click the channel > View channel details, ID is at the bottom)
+channel_id: "C0CC4ST183V"
+
+# Building time zone (examples: America/New_York, America/Chicago, America/Denver, America/Los_Angeles)
+timezone: "America/New_York"
+
+# Shift times in 24-hour format. A night shift that ends the next morning is handled automatically.
+shifts:
+  - name: "Day"
+    start: "06:00"
+    end: "15:00"
+  - name: "Night"
+    start: "15:00"
+    end: "23:59"
+
+# Days the building runs: 0=Mon 1=Tue 2=Wed 3=Thu 4=Fri 5=Sat 6=Sun
+work_days: [0, 1, 2, 3, 4]
+
+# Slack user IDs to tag when a checklist is missing
+# (click a person's profile > three dots > Copy member ID)
+alert_user_ids:
+  - "U09HJNDCX36"
+
+timing:
+  start_checklist_due_after_start: 30   # start-of-shift photo due this many minutes after shift start
+  handoff_reminder_before_end: 30       # handoff reminder posts this many minutes before shift end
+  handoff_due_after_end: 15             # handoff photo due this many minutes after shift end
+  catch_up_minutes: 60                  # if a run is late, still act on events up to this old
+
+messages:
+  start_reminder: ":clipboard: *{shift} shift has started.* Post a photo of the completed Start-of-Shift Checklist in this channel by *{due}*."
+  handoff_reminder: ":arrows_counterclockwise: *{shift} shift ends soon.* Post a photo of the signed End-of-Shift Handoff in this channel by *{due}*."
+  missing_alert: ":warning: No {checklist} photo was posted for the *{shift}* shift by {due}. Please post it now."
