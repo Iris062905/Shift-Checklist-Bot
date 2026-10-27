@@ -129,20 +129,57 @@ def post(client, channel, text, ev, dry_run):
         metadata={"event_type": EVENT_TYPE, "event_payload": {"kind": ev["kind"], "key": ev["key"]}})
 
 
+def in_window(msg, window):
+    return window[0].timestamp() <= float(msg["ts"]) <= window[1].timestamp()
+
+
+def has_bot_reaction(msg, emoji, bot_user_id):
+    for r in msg.get("reactions", []) or []:
+        if r.get("name") == emoji and bot_user_id in (r.get("users") or []):
+            return True
+    return False
+
+
 def run(client, cfg, now=None, dry_run=False):
     tz = ZoneInfo(cfg["timezone"])
     now = now or dt.datetime.now(tz)
     catch_up = dt.timedelta(minutes=cfg["timing"].get("catch_up_minutes", 60))
     channel = cfg["channel_id"]
+    emoji = cfg.get("accepted_reaction", "white_check_mark")
     actions = []
 
-    due = [e for e in build_events(cfg, now) if e["at"] <= now < e["at"] + catch_up]
-    if not due:
+    events = build_events(cfg, now)
+    due = [e for e in events if e["at"] <= now < e["at"] + catch_up]
+    # checklist windows that are open now, or closed recently enough to still confirm photos
+    windows = [e["window"] for e in events
+               if e["kind"].endswith("_check") and e["window"][0] <= now < e["window"][1] + catch_up]
+    if not due and not windows:
         return actions
 
-    oldest = min(min(e["at"], *(e.get("window") or (e["at"],))) for e in due) - dt.timedelta(minutes=5)
-    history = fetch_history(client, channel, oldest, now)
+    starts = [e["at"] for e in due] + [w[0] for e in due if e.get("window") for w in [e["window"]]] + [w[0] for w in windows]
+    history = fetch_history(client, channel, min(starts) - dt.timedelta(minutes=5), now)
 
+    # 1. Confirm accepted photos with a reaction
+    if emoji and windows:
+        bot_user_id = None
+        for m in history:
+            if not is_checklist_photo(m) or not any(in_window(m, w) for w in windows):
+                continue
+            if bot_user_id is None:
+                bot_user_id = "dry-run" if dry_run else client.auth_test()["user_id"]
+            if has_bot_reaction(m, emoji, bot_user_id):
+                continue
+            if dry_run:
+                print(f"[dry-run] would react :{emoji}: to photo at {m['ts']}")
+            else:
+                try:
+                    client.reactions_add(channel=channel, timestamp=m["ts"], name=emoji)
+                except SlackApiError as e:
+                    if e.response.get("error") != "already_reacted":
+                        raise
+            actions.append(("react", emoji, m["ts"]))
+
+    # 2. Reminders and missing-photo alerts
     for ev in due:
         if already_posted(history, ev["kind"], ev["key"]):
             continue
@@ -150,9 +187,7 @@ def run(client, cfg, now=None, dry_run=False):
             post(client, channel, message_for(ev, cfg), ev, dry_run)
             actions.append(("remind", ev["kind"], ev["key"]))
             continue
-        w_start, w_end = ev["window"]
-        found = any(is_checklist_photo(m) and w_start.timestamp() <= float(m["ts"]) <= w_end.timestamp()
-                    for m in history)
+        found = any(is_checklist_photo(m) and in_window(m, ev["window"]) for m in history)
         if not found:
             post(client, channel, message_for(ev, cfg), ev, dry_run)
             actions.append(("alert", ev["kind"], ev["key"]))
@@ -168,7 +203,11 @@ def main():
     try:
         actions = run(WebClient(token=token), cfg, dry_run=dry_run)
     except SlackApiError as e:
-        sys.exit(f"Slack error: {e.response.get('error')}")
+        r = e.response
+        msg = f"Slack error: {r.get('error')}"
+        if r.get("needed"):
+            msg += f" (needed scope: {r.get('needed')}; token has: {r.get('provided')})"
+        sys.exit(msg)
     for a in actions:
         print("done:", *a)
     if not actions:
@@ -179,6 +218,7 @@ def main():
         if upcoming:
             e = upcoming[0]
             print(f"Next: {e['kind']} for {e['shift']} shift at {e['at']:%Y-%m-%d %I:%M %p}")
+
 
 if __name__ == "__main__":
     main()
