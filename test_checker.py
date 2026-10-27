@@ -4,17 +4,39 @@ from zoneinfo import ZoneInfo
 import checker
 
 TZ = ZoneInfo("America/Chicago")
-CFG = checker.load_config()
+# Tests use their own fixed settings so they pass no matter how config.yaml is set up for a facility.
+CFG = {
+    "channel_id": "CTEST",
+    "timezone": "America/Chicago",
+    "shifts": [{"name": "Day", "start": "06:00", "end": "16:30"},
+               {"name": "Night", "start": "18:00", "end": "04:30"}],
+    "work_days": [0, 1, 2, 3, 4, 5, 6],
+    "alert_user_ids": ["U1"],
+    "accepted_reaction": "white_check_mark",
+    "timing": {"start_checklist_due_after_start": 30, "handoff_reminder_before_end": 30,
+               "handoff_due_after_end": 15, "catch_up_minutes": 60},
+    "messages": checker.load_config()["messages"],
+}
 
 
 class FakeSlack:
     def __init__(self, messages=None):
         self.messages = list(messages or [])
         self.posted = []
+        self.reactions = []
 
     def conversations_history(self, channel, oldest, latest, **kw):
         msgs = [m for m in self.messages if float(oldest) <= float(m["ts"]) <= float(latest)]
         return {"messages": msgs, "response_metadata": {}}
+
+    def auth_test(self):
+        return {"user_id": "UBOT"}
+
+    def reactions_add(self, channel, timestamp, name):
+        for m in self.messages:
+            if m["ts"] == timestamp:
+                m.setdefault("reactions", []).append({"name": name, "users": ["UBOT"]})
+                self.reactions.append(timestamp)
 
     def chat_postMessage(self, channel, text, metadata):
         self.posted.append(text)
@@ -76,3 +98,19 @@ def test_bot_messages_do_not_count_as_photos():
     c = FakeSlack([{"ts": str(at(2026, 10, 27, 6, 10).timestamp()), "bot_id": "B9", "files": [{}]}])
     acts = run(c, at(2026, 10, 27, 6, 35))
     assert ("alert", "start_check", "2026-10-27-Day") in acts
+
+
+def test_photo_in_window_gets_one_check():
+    p = photo(at(2026, 10, 27, 6, 10))
+    c = FakeSlack([p])
+    run(c, at(2026, 10, 27, 6, 12))   # window still open: confirm right away
+    run(c, at(2026, 10, 27, 6, 22))
+    run(c, at(2026, 10, 27, 6, 35))
+    assert c.reactions == [p["ts"]]
+
+
+def test_late_photo_gets_no_check():
+    p = photo(at(2026, 10, 27, 7, 30))   # Day start window closed at 6:30
+    c = FakeSlack([p])
+    run(c, at(2026, 10, 27, 7, 35))
+    assert c.reactions == []
